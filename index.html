@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Verificador por Voz - Serie B</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --success: #16a34a;
+            --danger: #dc2626;
+            --background: #f3f4f6;
+            --text: #1f2937;
+            --mic-active: #ef4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        h1 { font-size: 1.5rem; text-align: center; margin-bottom: 0.5rem; }
+        p.subtitle { color: #6b7280; text-align: center; margin-bottom: 25px; max-width: 400px; font-size: 0.95rem; }
+
+        /* WIDGET SELECTOR */
+        .denomination-selector {
+            width: 100%;
+            max-width: 350px;
+            display: flex;
+            background-color: #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+            padding: 4px;
+            margin-bottom: 25px;
+        }
+
+        .denomination-selector input[type="radio"] { display: none; }
+        .denomination-selector label {
+            flex: 1;
+            text-align: center;
+            padding: 12px 0;
+            font-weight: bold;
+            color: #4b5563;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            font-size: 1.1rem;
+        }
+
+        .denomination-selector input[type="radio"]:checked + label {
+            background-color: white;
+            color: var(--primary);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* ZONA DE ENTRADA Y DICTADO */
+        .input-container {
+            width: 100%;
+            max-width: 350px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .serial-input {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.5rem;
+            text-align: center;
+            border: 2px solid #d1d5db;
+            border-radius: 12px;
+            box-sizing: border-box;
+            letter-spacing: 2px;
+            font-family: monospace;
+        }
+
+        .serial-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .btn-mic {
+            padding: 18px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-mic:active { transform: translateY(2px); }
+        
+        /* Animación cuando el micrófono está escuchando */
+        .btn-mic.listening {
+            background-color: var(--mic-active);
+            animation: pulse 1.5s infinite;
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .btn-verify {
+            padding: 15px;
+            font-size: 1.1rem;
+            background-color: #4b5563;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        /* RESULTADOS */
+        #status { text-align: center; height: 20px; color: #6b7280; font-size: 0.9rem; margin-top: 10px; font-style: italic;}
+        
+        #result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 350px;
+            text-align: center;
+            display: none;
+            box-sizing: border-box;
+            font-size: 1.1rem;
+        }
+
+        .result-ok { background-color: #d1fae5; color: var(--success); border: 2px solid #10b981; }
+        .result-robado { background-color: #fee2e2; color: var(--danger); border: 2px solid #ef4444; }
+        .result-error { background-color: #ffedd5; color: #a16207; border: 2px solid #f59e0b; }
+        .serial-text { font-weight: bold; font-family: monospace; font-size: 1.5rem; display: block; margin: 10px 0;}
+    </style>
+</head>
+<body>
+
+    <h1>xDictado de Billetes</h1>
+    <p class="subtitle">Seleccione el corte y dicte el número de serie para verificar si es robado (Serie B).</p>
+
+    <div class="denomination-selector">
+        <input type="radio" id="bs10" name="corte" value="10" checked>
+        <label for="bs10">Bs 10</label>
+
+        <input type="radio" id="bs20" name="corte" value="20">
+        <label for="bs20">Bs 20</label>
+
+        <input type="radio" id="bs50" name="corte" value="50">
+        <label for="bs50">Bs 50</label>
+    </div>
+
+    <div class="input-container">
+        <input type="number" id="serialInput" class="serial-input" placeholder="Ej: 12345678" inputmode="numeric">
+        
+        <button id="dictateBtn" class="btn-mic" onclick="iniciarReconocimiento()">
+            🎤 Tocar para Dictar
+        </button>
+
+        <button class="btn-verify" onclick="verificarManual()">Verificar Escrito</button>
+    </div>
+
+    <div id="status"></div>
+    <div id="result"></div>
+
+    <script>
+        // BASE DE DATOS (Misma lógica, billetes Serie B robados)
+        const billetesRobados = [
+            { d: 50, des: 67250001, has: 67700000 }, { d: 50, des: 69050001, has: 69500000 },
+            { d: 50, des: 69500001, has: 69950000 }, { d: 50, des: 69950001, has: 70400000 },
+            { d: 50, des: 70400001, has: 70850000 }, { d: 50, des: 70850001, has: 71300000 },
+            { d: 50, des: 76310012, has: 85139995 }, { d: 50, des: 86400001, has: 86850000 },
+            { d: 50, des: 90900001, has: 91350000 }, { d: 50, des: 91800001, has: 92250000 },
+            { d: 20, des: 87280145, has: 91646549 }, { d: 20, des: 96650001, has: 97100000 },
+            { d: 20, des: 99800001, has: 100250000 }, { d: 20, des: 100250001, has: 100700000 },
+            { d: 20, des: 109250001, has: 109700000 }, { d: 20, des: 110600001, has: 111050000 },
+            { d: 20, des: 111050001, has: 111500000 }, { d: 20, des: 111950001, has: 112400000 },
+            { d: 20, des: 112400001, has: 112850000 }, { d: 20, des: 112850001, has: 113300000 },
+            { d: 20, des: 114200001, has: 114650000 }, { d: 20, des: 114650001, has: 115100000 },
+            { d: 20, des: 115100001, has: 115550000 }, { d: 20, des: 118700001, has: 119150000 },
+            { d: 20, des: 119150001, has: 119600000 }, { d: 20, des: 120500001, has: 120950000 },
+            { d: 10, des: 77100001, has: 77550000 }, { d: 10, des: 78000001, has: 78450000 },
+            { d: 10, des: 78900001, has: 96350000 }, { d: 10, des: 96350001, has: 96800000 },
+            { d: 10, des: 96800001, has: 97250000 }, { d: 10, des: 98150001, has: 98600000 },
+            { d: 10, des: 104900001, has: 105350000 }, { d: 10, des: 105350001, has: 105800000 },
+            { d: 10, des: 106700001, has: 107150000 }, { d: 10, des: 107600001, has: 108050000 },
+            { d: 10, des: 108050001, has: 108500000 }, { d: 10, des: 109400001, has: 109850000 }
+        ];
+
+        // ELEMENTOS DEL DOM
+        const serialInput = document.getElementById('serialInput');
+        const dictateBtn = document.getElementById('dictateBtn');
+        const statusDiv = document.getElementById('status');
+        const resultDiv = document.getElementById('result');
+
+        // CONFIGURACIÓN DE RECONOCIMIENTO DE VOZ
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            // Configuramos el idioma local para que entienda mejor la pronunciación
+            recognition.lang = 'es-BO'; 
+            recognition.continuous = false; // Se detiene al terminar la frase
+            recognition.interimResults = false; // Solo devuelve el resultado final
+
+            recognition.onstart = function() {
+                dictateBtn.classList.add('listening');
+                dictateBtn.innerHTML = "🔴 Escuchando...";
+                statusDiv.innerText = "Hable ahora. Diga los números...";
+                resultDiv.style.display = "none";
+            };
+
+            recognition.onresult = function(event) {
+                // Obtenemos lo que escuchó el micrófono
+                const textoEscuchado = event.results[0][0].transcript;
+                statusDiv.innerText = `Escuchado: "${textoEscuchado}"`;
+                
+                // Limpiamos el texto: extraemos SOLO los números. 
+                // Ej: "cero dos cinco 9" o "0256 B" se convierte en "02569"
+                const soloNumeros = textoEscuchado.replace(/\D/g, '');
+
+                if(soloNumeros.length > 0) {
+                    serialInput.value = soloNumeros; // Lo mostramos en el input
+                    ejecutarValidacion(soloNumeros); // Disparamos la verificación automáticamente
+                } else {
+                    mostrarResultado({ e: "ERR", msg: "No pude detectar ningún número en lo que dictaste." });
+                }
+            };
+
+            recognition.onerror = function(event) {
+                statusDiv.innerText = "Error en el micrófono: " + event.error;
+                mostrarResultado({ e: "ERR", msg: "Hubo un problema al escuchar. Intenta de nuevo." });
+            };
+
+            recognition.onend = function() {
+                dictateBtn.classList.remove('listening');
+                dictateBtn.innerHTML = "🎤 Tocar para Dictar";
+            };
+        } else {
+            dictateBtn.style.display = 'none';
+            statusDiv.innerText = "Tu navegador no soporta dictado por voz. Usa el teclado.";
+        }
+
+        // FUNCIONES DE CONTROL
+        function iniciarReconocimiento() {
+            if (recognition) {
+                serialInput.value = "";
+                recognition.start();
+            }
+        }
+
+        function verificarManual() {
+            const numeroEscrito = serialInput.value.trim();
+            if(numeroEscrito.length > 0) {
+                ejecutarValidacion(numeroEscrito);
+            } else {
+                mostrarResultado({ e: "ERR", msg: "Por favor, escribe o dicta un número primero." });
+            }
+        }
+
+        // LÓGICA DE VERIFICACIÓN
+        function ejecutarValidacion(numeroString) {
+            const corteSeleccionado = parseInt(document.querySelector('input[name="corte"]:checked').value, 10);
+            const numEntero = parseInt(numeroString, 10); // Convertimos a entero para evaluar rangos
+
+            // Filtramos la base de datos por el corte
+            const billetesDelCorte = billetesRobados.filter(rango => rango.d === corteSeleccionado);
+            
+            // Buscamos si el número cae en el rango
+            const encontrado = billetesDelCorte.find(r => numEntero >= r.des && numEntero <= r.has);
+
+            if (encontrado) {
+                mostrarResultado({ e: "ROBADO", n: numeroString, d: encontrado.d });
+            } else {
+                mostrarResultado({ e: "OK", n: numeroString, d: corteSeleccionado });
+            }
+        }
+
+        function mostrarResultado(res) {
+            resultDiv.style.display = "block";
+            resultDiv.className = "";
+
+            if (res.e === "OK") {
+                resultDiv.className = "result-ok";
+                resultDiv.innerHTML = `✔ <strong>BILLETE VÁLIDO</strong>
+                                       <span class="serial-text">${res.n}</span>
+                                       <small>Este billete de Bs${res.d} NO está en la lista de robados.</small>`;
+            } else if (res.e === "ROBADO") {
+                resultDiv.className = "result-robado";
+                resultDiv.innerHTML = `⚠ <strong>¡ALERTA! BILLETE ROBADO</strong>
+                                       <span class="serial-text">${res.n}</span>
+                                       Pertenece al lote robado de Bs${res.d}.<br>
+                                       <strong>¡No lo acepte!</strong>`;
+            } else if (res.e === "ERR") {
+                resultDiv.className = "result-error";
+                resultDiv.innerHTML = `<strong>Aviso</strong><br>${res.msg}`;
+            }
+        }
+    </script>
+</body>
+</html>
